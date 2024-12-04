@@ -55,5 +55,20 @@
   "C_Cpp_Runner.useLeakSanitizer": false,
   "C_Cpp_Runner.showCompilationTime": false,
   "C_Cpp_Runner.useLinkTimeOptimization": false,
-  "C_Cpp_Runner.msvcSecureNoWarnings": false
+  "C_Cpp_Runner.msvcSecureNoWarnings": false,
+  "files.associations": {
+    "iosfwd": "cpp",
+    "deque": "cpp",
+    "string": "cpp",
+    "vector": "cpp",
+    "any": "cpp",
+    "optional": "cpp",
+    "variant": "cpp",
+    "ostream": "cpp",
+    "memory": "cpp",
+    "format": "cpp",
+    "istream": "cpp",
+    "functional": "cpp",
+    "*.tcc": "cpp"
+  }
 }

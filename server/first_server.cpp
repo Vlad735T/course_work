@@ -29,7 +29,6 @@ using json = nlohmann::json;
 int main(){
 
     filesystem::path current_path = filesystem::current_path();
-
     cout << "Current directory: " << current_path << endl;
 
     string paths = current_path;
@@ -85,14 +84,12 @@ int main(){
         exit(-1);
     }
 
-    cout << "Server listening on PORT: " << PORT << "\n";
-
 
     while(true){
 
         cout << "Waiting for a client connection...\n";
 
-                string input;
+        string input;
         getline(cin, input);
 
        // Handle server commands and log events
@@ -120,8 +117,11 @@ int main(){
 
         send(new_socket, answer, strlen(answer), 0);
         cout << "Message send to client\n";
-        close(new_socket);
+
     }
+    
+    close(new_socket);
+
     close(server_fd);
 
     return 0;

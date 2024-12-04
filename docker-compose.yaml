@@ -2,15 +2,16 @@ version: "3.8"
 services:
   #name for container
   server: 
+    image: server
+    container_name: ${NAME}
     build:
       context: ./server
       dockerfile: Dockerfile
     ports:
-      - ${PORT}
+      - "${PORT}:${PORT}"
     environment:
-      - GID=${GID}
       - UID=${UID}
-      - TZ=${TZ}
+      - GID=${GID}
     logging:
       driver: "json-file"
       options:
@@ -18,7 +19,7 @@ services:
         max-file: "2"
     restart: always
     volumes:
-      - ./configuration.json:/app/configuration.json
+      - /home/kln735/Application_with_DB/server/configuration.json:/app/configuration.json
     healthcheck:
       test: ["CMD-SHELL", "/app/health_check.sh"]
       interval: 30s

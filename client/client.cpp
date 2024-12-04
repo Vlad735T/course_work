@@ -19,7 +19,7 @@ using json = nlohmann::json;
 int main() {
 
 
-    string path_to_json =  "/home/kln735/course_work/server/configuration.json";
+    string path_to_json =  "/home/kln735/Application_with_DB/server/configuration.json";
     cout << "Current directory: " << path_to_json << endl;
 
     ifstream json_file(path_to_json);
@@ -34,12 +34,13 @@ int main() {
     string host = config["client"]["host"].get<string>();
     int PORT = config["client"]["port"];
 
+    cout << "Current host: " << host << endl;
+    cout << "Current PORT: " << PORT << endl;
 
 
     int sock = 0;
     struct sockaddr_in serv_addr;
 
-    const char* message_client = "Hello from client";
     char bufer[1024] = {0};
 
 
@@ -62,11 +63,33 @@ int main() {
         exit(-1);
     }
 
-    send(sock, message_client, strlen(message_client), 0);
-    cout << "Message sent to server" << endl;
+    while(true){
 
-    read(sock, bufer, 1024);
-    cout << "Response from server: " << bufer << endl;
+
+        cout << "Enter thr message: ";
+
+        string input;
+        getline(cin, input);
+        if(input == "exit"){
+            cout << "Shutting down client...\n";
+            break;
+        }
+
+        send(sock, input.c_str(), input.length(), 0);
+        cout << "Message sent to server" << endl;
+
+        size_t bytes_read = read(sock, bufer, 1024);
+        if (bytes_read > 0) {
+            cout << "Response from server: " << bufer << endl;
+        } else {
+            cerr << "Failed to read response from server" << endl;
+            break;
+        }
+
+        memset(bufer, 0, sizeof(bufer)); // Очистка буфера
+
+    }
+
 
     close(sock);
 
