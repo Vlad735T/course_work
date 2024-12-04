@@ -3,93 +3,48 @@
 #include <random>
 #include <vector>
 #include <nlohmann/json.hpp>
-
-
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <memory>
+#include <unordered_map>
 
 using namespace std;
 using json = nlohmann::json;
 
-class Person{
+class EnvReader {
+private:
+    unordered_map<string, string> variables;
+
 public:
-    string name;
-    string surname;
-    string middle_name;
-};
+    explicit EnvReader(const string& env_file_path) {
+        ifstream env_file(env_file_path);
+        if (!env_file.is_open()) {
+            cerr << "Error opening .env file\n";
+            exit(-1);
+        }
 
-int generation_number(const double& min, const double& max){
-    random_device rd;
-    mt19937 gen(rd());
-    uniform_int_distribution<> dis(min, max);
-    return dis(gen);
-}
-
-string generation_set_letters(){
-    
-    string letters = "ABEKMHOPCTYX";
-
-    string result;
-
-    random_device rd;
-    mt19937 gen(rd());
-    uniform_int_distribution<> dis(0, letters.size() - 1);
-
-
-    for(int i = 0; i < 3; i++){
-        result += letters[dis(gen)];
-    }
-    return result;
-}
-
-string merger(){
-    
-    string letters = generation_set_letters();
-    int number = generation_number(0, 1000);
-    int region = generation_number(1, 199); 
-    
-    string result = letters.substr(0, 1) + to_string(number) 
-                    + letters.substr(1) + "," + to_string(region);
-    return result;
-
-}
-
-
-
-
-
-
-Person generation_person(const vector<string>& names, 
-                        const vector<string>& surnames, const vector<string>& middle_names){
-
-    Person person;
-    person.name = names[generation_number(0, names.size() - 1)];
-    person.surname  = surnames[generation_number(0, surnames.size() - 1)];
-    person.middle_name  = middle_names[generation_number(0, middle_names.size() - 1)];
-
-    return person;
-}
-
-//FROM ENV
-string get_env_variable(const string& key, const string& env_file_path) {
-    ifstream env_file(env_file_path);
-    if (!env_file.is_open()) {
-        cerr << "Error opening .env file\n";
-        exit(-1);
-    }
-
-    string line;
-    while (getline(env_file, line)) {
-        line.erase(remove(line.begin(), line.end(), ' '), line.end()); // Удаляем пробелы
-        if (line.find(key + "=") == 0) {
-            return line.substr(key.length() + 1);
+        string line;
+        while (getline(env_file, line)) {
+            line.erase(remove(line.begin(), line.end(), ' '), line.end()); // Удаляем пробелы
+            size_t pos = line.find('=');
+            if (pos != string::npos) {
+                string key = line.substr(0, pos);
+                string value = line.substr(pos + 1);
+                variables[key] = value;
+            }
         }
     }
 
-    cerr << "Key " << key << " not found in .env file\n";
-    return "";
-}
+    string get_variable(const string& key) const {
+        auto it = variables.find(key);
+        if (it != variables.end()) {
+            return it->second;
+        }
+        cerr << "Key " << key << " not found in .env file\n";
+        return "";
+    }
+};
 
 vector<string> split_string(const string& str, char delimiter) {
     vector<string> result;
@@ -101,58 +56,146 @@ vector<string> split_string(const string& str, char delimiter) {
     return result;
 }
 
-void CREATE_DB(const vector<Person>& people, const json& structure, const string& file_name){
+// Интерфейс для генерации случайных чисел
+class IRandomGenerator {
+public:
+    virtual int generate(int min, int max) = 0;
+    virtual ~IRandomGenerator() = default;
+};
 
-    if (filesystem::exists(file_name)){
-        cout << "The table has already been created!!!\n";
-        return;
+class RandomNumberGenerator : public IRandomGenerator {
+public:
+    int generate(int min, int max) override {
+        random_device rd;
+        mt19937 gen(rd());
+        uniform_int_distribution<> dis(min, max);
+        return dis(gen);
     }
+};
 
-    ofstream db_file(file_name);
-    if (!db_file.is_open()){
-        cerr << "Error opening db file\n";
-        exit(-1);
+// Интерфейс для генерации строк
+class IStringGenerator {
+public:
+    virtual string generate() = 0;
+    virtual ~IStringGenerator() = default;
+};
+
+class LicensePlateGenerator : public IStringGenerator {
+private:
+    shared_ptr<IRandomGenerator> rng;
+
+public:
+    explicit LicensePlateGenerator(shared_ptr<IRandomGenerator> random_gen) : rng(random_gen) {}
+
+    string generate() override {
+        string letters = "ABEKMHOPCTYX";
+        string result;
+
+        for (int i = 0; i < 3; i++) {
+            result += letters[rng->generate(0, letters.size() - 1)];
+        }
+        return result;
     }
+};
 
-    db_file << structure["surname"].get<string>() << "," << structure["name"].get<string>() 
-            << "," << structure["middle_name"].get<string>() << "," << structure["brand_of_car"].get<string>() << "," 
-            << structure["number_of_car"].get<string>() << "," << structure["region"].get<string>() 
-            << "," << structure["power"].get<string>() << "," << structure["engine_volume"].get<string>() 
-            << "," << structure["release_year"].get<string>() << "\n";
+// Класс для генерации полного номера машины
+class Merger {
+private:
+    shared_ptr<IRandomGenerator> rng;
+    shared_ptr<IStringGenerator> plate_generator;
 
+public:
+    Merger(shared_ptr<IRandomGenerator> random_gen, shared_ptr<IStringGenerator> plate_gen)
+        : rng(random_gen), plate_generator(plate_gen) {}
 
+    string generate() {
+        string letters = plate_generator->generate();
+        int number = rng->generate(0, 999);
+        int region = rng->generate(1, 199);
 
-    string env_file_path = "/home/kln735/Application_with_DB/.env";
-    string brands_car_value = get_env_variable("BRANDS_CAR", env_file_path);
-    if (brands_car_value.empty()) {
-        exit(-1);
+        stringstream number_stream;
+        number_stream << setw(3) << setfill('0') << number;
+
+        string result = letters.substr(0, 1) + number_stream.str() + letters.substr(1) + "," + to_string(region);
+        return result;
     }
+};
 
-    vector<string> brands = split_string(brands_car_value, ',');
+// Генерация людей с помощью фабрики
+class Person {
+public:
+    string name;
+    string surname;
+    string middle_name;
 
+    Person(string n, string s, string m) : name(move(n)), surname(move(s)), middle_name(move(m)) {}
+};
 
-    for(auto it = 0; it < people.size() ; it++){
-        db_file << people[it].surname << "," << people[it].name 
-        << "," << people[it].middle_name << "," << brands[generation_number(0, brands.size() - 1)] 
-        << "," << merger() << "," << generation_number(13, 1001) << "," 
-        << generation_number(0.8, 28.2) << ","<< generation_number(2000, 2024) <<"\n";
+class PersonFactory {
+private:
+    shared_ptr<IRandomGenerator> rng;
+
+public:
+    explicit PersonFactory(shared_ptr<IRandomGenerator> random_gen) : rng(random_gen) {}
+
+    Person generate_person(const vector<string>& names, const vector<string>& surnames, const vector<string>& middle_names) {
+        string name = names[rng->generate(0, names.size() - 1)];
+        string surname = surnames[rng->generate(0, surnames.size() - 1)];
+        string middle_name = middle_names[rng->generate(0, middle_names.size() - 1)];
+        return Person(name, surname, middle_name);
     }
+};
+
+// Менеджер базы данных
+class DatabaseManager {
+private:
+    shared_ptr<IRandomGenerator> rng;
+    shared_ptr<IStringGenerator> plate_generator;
+    shared_ptr<Merger> merger;
+    vector<string> brands;
+
+public:
+    DatabaseManager(shared_ptr<IRandomGenerator> random_gen, shared_ptr<IStringGenerator> plate_gen, 
+                    const vector<string>& car_brands, shared_ptr<Merger> merger_instance)
+        : rng(random_gen), plate_generator(plate_gen), brands(car_brands), merger(merger_instance) {} 
 
 
+    void create_db(const vector<Person>& people, const json& structure, const string& file_name) {
+        if (filesystem::exists(file_name)) {
+            cout << "The table has already been created!!!\n";
+            return;
+        }
 
-    db_file.close();
-}
+        ofstream db_file(file_name);
+        if (!db_file.is_open()) {
+            cerr << "Error opening db file\n";
+            exit(-1);
+        }
 
+        db_file << structure["surname"].get<string>() << "," << structure["name"].get<string>()
+                << "," << structure["middle_name"].get<string>() << "," << structure["brand_of_car"].get<string>()
+                << "," << structure["number_of_car"].get<string>() << "," << structure["region"].get<string>()
+                << "," << structure["power"].get<string>() << "," << structure["engine_volume"].get<string>()
+                << "," << structure["release_year"].get<string>() << "\n";
 
+        for (const auto& person : people) {
+            string license_plate = merger->generate();
+            int power = rng->generate(13, 1001);
+            double engine_volume = rng->generate(80, 282) / 10.0; // Переводим в диапазон 0.8 - 28.2
+            int release_year = rng->generate(2000, 2024);
+            string brand = brands[rng->generate(0, brands.size() - 1)];
 
+            db_file << person.surname << "," << person.name << "," << person.middle_name << "," << brand << ","
+                    << license_plate << "," << power << "," << engine_volume << "," << release_year << "\n";
+        }
 
+        db_file.close();
+    }
+};
 
-
-
-int main(){
-
+int main() {
     ifstream json_file("/home/kln735/Application_with_DB/server/configuration.json");
-    if(!json_file.is_open()){
+    if (!json_file.is_open()) {
         cerr << "Error opening json file\n";
         exit(-1);
     }
@@ -160,24 +203,27 @@ int main(){
     json config;
     json_file >> config;
 
-    vector<string> name = config["names"].get<vector<string>>();
-    vector<string> sur_name = config["surnames"].get<vector<string>>();
+    vector<string> names = config["names"].get<vector<string>>();
+    vector<string> surnames = config["surnames"].get<vector<string>>();
     vector<string> middle_names = config["middle_name"].get<vector<string>>();
 
-    int numPeople = 10'000; 
+    EnvReader env_reader("/home/kln735/Application_with_DB/.env");
+    string brands_str = env_reader.get_variable("BRANDS_CAR");
+    vector<string> brands = split_string(brands_str, ',');
+
+    auto rng = make_shared<RandomNumberGenerator>();
+    auto plate_gen = make_shared<LicensePlateGenerator>(rng);
+    auto merger = make_shared<Merger>(rng, plate_gen);
+    PersonFactory person_factory(rng);
+
+    int numPeople = 10000;
     vector<Person> people;
     for (int i = 0; i < numPeople; ++i) {
-        Person person = generation_person(name, sur_name, middle_names);
-        people.push_back(person);
+            people.push_back(person_factory.generate_person(names, surnames, middle_names));
     }
 
-    try {
-        CREATE_DB(people, config["structure"], "database.csv");
-    } catch (const std::exception& e) {
-        cerr << "JSON Error: " << e.what() << endl;
-        return -1;
-    }
-
+    DatabaseManager db_manager(rng, plate_gen, brands, merger);
+    db_manager.create_db(people, config["structure"], "database.csv");
 
     return 0;
 }
