@@ -2,12 +2,17 @@
 #include <string>
 #include <random>
 #include <vector>
-#include <nlohmann/json.hpp>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <memory>
 #include <unordered_map>
+#include <regex>    // for search special symbol
+
+#include <locale>
+#include <codecvt>
+
+#include <nlohmann/json.hpp>
 
 using namespace std;
 using json = nlohmann::json;
@@ -42,19 +47,40 @@ public:
             return it->second;
         }
         cerr << "Key " << key << " not found in .env file\n";
-        return "";
+        exit(-1);
+    }
+
+    void check_special_characters(const string& str) const {
+        string special_chars = "!»\" №;%:?*()+=\\-./’”:{[]}@#$^&<>\|1234567890";
+        for (char ch : str) {
+            if (special_chars.find(ch) != string::npos) {
+                cerr << "Error: Special character '" << ch << "' found in string.\n";
+                exit(-1); 
+            }
+        }
     }
 };
 
-vector<string> split_string(const string& str, char delimiter) {
+vector<string> split_string(const string& str, char delimiter, const EnvReader& reader) {
     vector<string> result;
     stringstream ss(str);
     string token;
     while (getline(ss, token, delimiter)) {
+        // Проверяем на наличие специальных символов в каждом токене
+        reader.check_special_characters(token);
+
+        if (token.empty()) {
+            cerr << "Error: The 'BRANDS_CAR' environment variable contains empty strings or spaces!!!\n";
+            exit(-1);
+        }
+
         result.push_back(token);
     }
     return result;
 }
+
+
+
 
 // Интерфейс для генерации случайных чисел
 class IRandomGenerator {
@@ -193,23 +219,119 @@ public:
     }
 };
 
+
+
+bool validate_json_structure(const json& j) {
+    // Ожидаемая структура
+    json expected_structure = {
+        {"name", ""},
+        {"surname", ""},
+        {"middle_name", ""},
+        {"brand_of_car", ""},
+        {"number_of_car", ""},
+        {"region", ""},
+        {"power", ""},
+        {"engine_volume", ""},
+        {"release_year", ""}
+    };
+
+    string special_chars = "!»\" №;%:?*()+=\\-./’”:{[]}@#$^&<>\|1234567890";
+
+    for (const auto& item : expected_structure.items()) {
+        const string& key = item.key();
+        
+        // Проверка наличия ключа
+        if (!j.contains(key)) {
+            cerr << "Error: Missing key '" << key << "' in the structure!" << endl;
+            return false;
+        }
+
+        // Проверка, что значение является строкой
+        if (!j[key].is_string()) {
+            cerr << "Error: The value of key '" << key << "' is not a string!" << endl;
+            return false;
+        }
+
+        // Получаем строку
+        string value = j[key].get<string>();
+
+        // Проверка на пустое значение
+        if (value.empty()) {
+            cerr << "Error: The value of key '" << key << "' is empty!" << endl;
+            return false;
+        }
+
+        // Проверка на наличие специальных символов
+        for (char ch : value) {
+            if (special_chars.find(ch) != string::npos) {
+                cerr << "Error: The value of key '" << key << "' contains an invalid character '" << ch << "'!" << endl;
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool validate_string_array(const json& j, const string& field_name) {
+
+    if (!j.contains(field_name) || j[field_name].is_null() || j[field_name].empty() || !j[field_name].is_array()) {
+        cerr << "Error: The '" << field_name << "' field is missing, null, empty, or not an array in the JSON file!!!\n";
+        return false;
+    }
+
+    string special_chars = "!»\" №;%:?*()+=\\-./’”:{[]}@#$^&<>\|1234567890";
+
+    for (const auto& item : j[field_name]) {
+        // Проверяем, что элемент является строкой и не пустой
+        if (!item.is_string() || item.empty()) {
+            cerr << "Error: The '" << field_name << "' field contains non-string elements, empty strings, or strings with only spaces in the JSON file!!!\n";
+            return false;
+        }
+
+        for (char ch : item.get<string>()) {
+            if (special_chars.find(ch) != string::npos) {
+                cerr << "Error: The string '" << item.get<string>() << "' in the field '" << field_name << "' contains an invalid character '" << ch << "'!!!\n";
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+
+
+
 int main() {
-    ifstream json_file("/home/kln735/Application_with_DB/server/configuration.json");
+
+    // Устанавливаем локаль для поддержки UTF-8
+    setlocale(LC_ALL, "en_US.UTF-8");
+
+    filesystem::path current_path = filesystem::current_path();
+    filesystem::path json_path = current_path.parent_path() / "server" / "configuration.json"; 
+    ifstream json_file(json_path);
     if (!json_file.is_open()) {
-        cerr << "Error opening json file\n";
+        cerr << "Error: The JSON file was not opened. Please check if the correct directory is specified or if the file exists at the specified path!!!\n";
         exit(-1);
     }
 
+
     json config;
     json_file >> config;
-
+    if (!validate_string_array(config, "names") || !validate_string_array(config, "surnames") || 
+        !validate_string_array(config, "middle_name") || !validate_json_structure( config["structure"] )) {
+        exit(-1);
+    }
     vector<string> names = config["names"].get<vector<string>>();
     vector<string> surnames = config["surnames"].get<vector<string>>();
     vector<string> middle_names = config["middle_name"].get<vector<string>>();
 
-    EnvReader env_reader("/home/kln735/Application_with_DB/.env");
+
+    EnvReader env_reader(current_path.parent_path() / ".env");
     string brands_str = env_reader.get_variable("BRANDS_CAR");
-    vector<string> brands = split_string(brands_str, ',');
+    vector<string> brands = split_string(brands_str, ',', env_reader);
+
 
     auto rng = make_shared<RandomNumberGenerator>();
     auto plate_gen = make_shared<LicensePlateGenerator>(rng);
