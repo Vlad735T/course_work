@@ -70,6 +70,10 @@
     "istream": "cpp",
     "functional": "cpp",
     "*.tcc": "cpp",
-    "fstream": "cpp"
+    "fstream": "cpp",
+    "iostream": "cpp",
+    "filesystem": "cpp",
+    "iomanip": "cpp",
+    "random": "cpp"
   }
 }

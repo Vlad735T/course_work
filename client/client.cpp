@@ -1,97 +1,80 @@
 #include <iostream>
+#include <boost/asio.hpp>
 #include <string>
-#include <cstring>
-
-#include <nlohmann/json.hpp>
-#include <fstream>
-#include <filesystem>
-
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 
 using namespace std;
-using json = nlohmann::json;
+using boost::asio::ip::tcp;
 
+const size_t MAX_BUFFER_SIZE = 8192; // Максимальный размер буфера для чтения данных
 
+void receive_data(tcp::socket& socket) {
+    char buffer[MAX_BUFFER_SIZE];
+    boost::system::error_code error;
+
+    cout << "Receiving data from server...\n";
+
+    while (true) {
+        // Читаем данные из сокета в буфер
+        size_t len = socket.read_some(boost::asio::buffer(buffer), error);
+
+        // Обработка ошибок
+        if (error == boost::asio::error::eof) {
+            // Сервер закрыл соединение
+            cout << "Connection closed by server." << endl;
+            break;
+        } else if (error) {
+            cerr << "Error while reading from server: " << error.message() << endl;
+            break;
+        }
+
+        // Печатаем полученные данные
+        cout << string(buffer, len);
+
+        // Если размер меньше буфера, значит передача завершена
+        if (len < MAX_BUFFER_SIZE) {
+            break;
+        }
+    }
+
+    cout << "\nFinished receiving data from server." << endl;
+}
 
 int main() {
+    try {
+        // Создаем объект io_context для работы с асинхронными операциями
+        boost::asio::io_context io_context;
 
+        // Указываем IP-адрес и порт сервера
+        tcp::resolver resolver(io_context);
+        auto endpoints = resolver.resolve("127.0.0.1", "7432"); // localhost, порт 7432
 
-    string path_to_json =  "/home/kln735/Application_with_DB/server/configuration.json";
-    cout << "Current directory: " << path_to_json << endl;
+        tcp::socket socket(io_context);
+        boost::asio::connect(socket, endpoints);
 
-    ifstream json_file(path_to_json);
-    if(!json_file.is_open()){  
-        cerr << "Error opening json file\n";
-        exit(-1);
-    }
+        cout << "Connected to the server." << endl;
 
-    json config;
-    json_file >> config;
+        while (true) {
+            // Чтение команды от пользователя
+            string command;
+            cout << "Enter command (1 to get data, 'exit' to disconnect): ";
+            getline(cin, command);
 
-    string host = config["client"]["host"].get<string>();
-    int PORT = config["client"]["port"];
+            // Отправляем команду на сервер
+            boost::asio::write(socket, boost::asio::buffer(command + "\n"));
 
-    cout << "Current host: " << host << endl;
-    cout << "Current PORT: " << PORT << endl;
+            if (command == "exit") {
+                cout << "Exiting the client application." << endl;
+                break; // Закрытие соединения, если команда 'exit'
+            }
 
-
-    int sock = 0;
-    struct sockaddr_in serv_addr;
-
-    char bufer[1024] = {0};
-
-
-    if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-        cerr << "Socket creation failed\n";
-        exit (-1);
-    }
-
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(PORT);
-
-// Преобразование IP-адреса
-    if(inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr) <= 0){
-        cerr << "Invalid address\n";
-        exit(-1);
-    }
-
-    if(connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
-        cerr << "Connection Failed\n";
-        exit(-1);
-    }
-
-    while(true){
-
-
-        cout << "Enter thr message: ";
-
-        string input;
-        getline(cin, input);
-        if(input == "exit"){
-            cout << "Shutting down client...\n";
-            break;
+            // Получение данных с сервера
+            receive_data(socket);
         }
 
-        send(sock, input.c_str(), input.length(), 0);
-        cout << "Message sent to server" << endl;
-
-        size_t bytes_read = read(sock, bufer, 1024);
-        if (bytes_read > 0) {
-            cout << "Response from server: " << bufer << endl;
-        } else {
-            cerr << "Failed to read response from server" << endl;
-            break;
-        }
-
-        memset(bufer, 0, sizeof(bufer)); // Очистка буфера
-
+        socket.close(); // Закрываем сокет
+    } catch (const std::exception& e) {
+        cerr << "Exception: " << e.what() << endl;
     }
-
-
-    close(sock);
 
     return 0;
 }

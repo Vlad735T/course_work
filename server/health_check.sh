@@ -1,4 +1,15 @@
-#! /bin/bash
+#!/bin/bash
+
+# Проверяем, доступен ли сервер на порту (используем curl для запроса)
+curl -s "http://localhost:${PORT}/health" > /dev/null
+# Если curl вернул успешный код (0), считаем, что сервер работает
+if [ $? -eq 0 ]; then
+    echo "Server is healthy"
+else
+    echo "Server is unhealthy"
+    exit 1
+fi
+
 
 # CHECK CPU
 cpu_usage =$(top -bn1 | grep "Cpu(s)" | awk '{print $2+$4+$6}')

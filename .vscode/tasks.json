@@ -9,7 +9,10 @@
                 "-g",
                 "${file}",
                 "-o",
-                "${fileDirname}/${fileBasenameNoExtension}"
+                "${fileDirname}/${fileBasenameNoExtension}",
+                "-lpqxx",
+                "-lpq",
+                "-std=c++17"  // Добавляем флаг для C++17
             ],
             "options": {
                 "cwd": "${fileDirname}"

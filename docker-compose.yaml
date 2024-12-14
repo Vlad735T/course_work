@@ -1,27 +1,185 @@
-version: "3.8"
+# version: "3.9"
+
+# services:
+
+#   # Контейнер для PostgreSQL и запуска C++ кода
+#   postgres_db:
+#     build:
+#       context: ./work_with_DB 
+#       dockerfile: Dockerfile
+#     container_name: postgres_db
+#     environment:
+#       POSTGRES_USER: admin
+#       POSTGRES_PASSWORD: Qwerty1!@
+#       POSTGRES_DB: data_based_of_cars
+#     ports:
+#       - "5433:5432" 
+#     volumes:
+#       - ./server/configuration.json:/app/configuration.json    
+#       - ./.env:/app/.env  # Монтируем .env файл
+#       - ./postgres_data:/var/lib/postgresql/data  # Для хранения данных
+#     networks:
+#       - my_network
+#     restart: always
+#     command: ["postgres"]
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U admin -d data_based_of_cars"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 5
+
+
+
+
+#   # Контейнер для серверного приложения
+#   server:
+#     build:
+#       context: ./server  # Контекст для сборки контейнера сервера
+#       dockerfile: Dockerfile  # Dockerfile для сервера
+#     container_name: ${NAME}
+#     depends_on:
+#       - postgres_db    # Ожидаем, что PostgreSQL будет доступен
+#     ports:
+#       - "${PORT}:${PORT}"  # Проброс портов для сервера
+#     environment:
+#       POSTGRES_HOST: postgres_db  # Имя хоста для подключения к базе данных
+#       POSTGRES_PORT: 5433  # Порт PostgreSQL
+#       POSTGRES_USER: admin
+#       POSTGRES_PASSWORD: Qwerty1!@
+#       POSTGRES_DB: data_based_of_cars
+#       UID: ${UID}
+#       GID: ${GID}
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "10m"
+#         max-file: "2"
+#     volumes:
+#       - ./server/configuration.json:/app/configuration.json  # Конфигурационный файл для сервера
+#     networks:
+#       - my_network
+#     restart: always
+#     command: ["sh", "-c", "/usr/local/bin/wait-for-it.sh postgres_db:5433 -- ./server"]
+#     healthcheck:
+#       test: ["CMD-SHELL", "/app/health_check.sh"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+
+# networks:
+#   my_network:  # Настроили сеть для связи контейнеров
+
+# volumes:
+#   postgres_data:  # Volume для хранения данных PostgreSQL
+
+# version: "3.9"
+
+# services:
+
+#   # Контейнер для PostgreSQL
+#   postgres_db:
+#     build:
+#       context: ./work_with_DB
+#       dockerfile: Dockerfile
+#     container_name: postgres_db
+#     environment:
+#       POSTGRES_USER: admin
+#       POSTGRES_PASSWORD: Qwerty1!@
+#       POSTGRES_DB: data_based_of_cars
+#     ports:
+#       - "5433:5432"
+#     volumes:
+#       - ./server/configuration.json:/app/configuration.json
+#       - ./.env:/app/.env  # Монтируем .env файл
+#       - ./postgres_data:/var/lib/postgresql/data  # Для хранения данных
+#     networks:
+#       - my_network
+#     restart: always
+#     command: ["postgres"]
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U admin -d data_based_of_cars"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 5
+
 services:
-  #name for container
-  server: 
-    image: server
-    container_name: ${NAME}
+  postgres_db:
     build:
-      context: ./server
+      context: ./work_with_DB
       dockerfile: Dockerfile
-    ports:
-      - "${PORT}:${PORT}"
+    container_name: postgres_db
     environment:
-      - UID=${UID}
-      - GID=${GID}
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "2"
-    restart: always
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: Qwerty1!@
+      POSTGRES_DB: data_based_of_cars
+    ports:
+      - "5433:5432"
     volumes:
-      - /home/kln735/Application_with_DB/server/configuration.json:/app/configuration.json
+      - ./server/configuration.json:/app/configuration.json
+      - ./.env:/app/.env
+      - ./postgres_data:/var/lib/postgresql/data
+    networks:
+      - my_network
+    restart: always
     healthcheck:
-      test: ["CMD-SHELL", "/app/health_check.sh"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d data_based_of_cars"]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+
+  app:
+    build:
+      context: ./work_with_DB
+      dockerfile: Dockerfile
+    container_name: app
+    depends_on:
+      - postgres_db
+    networks:
+      - my_network
+    restart: always
+    command: ["sh", "-c", "/usr/local/bin/wait-for-it.sh postgres_db:5432 -- /usr/src/app/create_only_postgreDB"]
+
+networks:
+  my_network:
+    driver: bridge
+
+  # Контейнер для серверного приложения (закомментирован)
+  # server:
+  #   build:
+  #     context: ./server
+  #     dockerfile: Dockerfile
+  #   container_name: ${NAME}
+  #   depends_on:
+  #     - postgres_db  # Ожидаем, что PostgreSQL будет доступен
+  #   ports:
+  #     - "${PORT}:${PORT}"
+  #   environment:
+  #     POSTGRES_HOST: postgres_db
+  #     POSTGRES_PORT: 5433
+  #     POSTGRES_USER: admin
+  #     POSTGRES_PASSWORD: Qwerty1!@
+  #     POSTGRES_DB: data_based_of_cars
+  #     UID: ${UID}
+  #     GID: ${GID}
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "2"
+  #   volumes:
+  #     - ./server/configuration.json:/app/configuration.json
+  #   networks:
+  #     - my_network
+  #   restart: always
+  #   command: ["sh", "-c", "/usr/local/bin/wait-for-it.sh postgres_db:5433 -- ./server"]
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "/app/health_check.sh"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
+# networks:
+#   my_network:  # Настроили сеть для связи контейнеров
+
+volumes:
+  postgres_data:  # Volume для хранения данных PostgreSQL
